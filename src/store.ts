@@ -123,3 +123,38 @@ export function clearAllRecords(): void {
   data = { ...data, records: [] }
   saveData(data)
 }
+
+const PASSWORD_KEY = 'jifen-app:password'
+const LOGGED_IN_KEY = 'jifen-app:logged-in'
+
+export function setPassword(password: string): void {
+  const encrypted = btoa(password)
+  localStorage.setItem(PASSWORD_KEY, encrypted)
+}
+
+export function verifyPassword(password: string): boolean {
+  const stored = localStorage.getItem(PASSWORD_KEY)
+  if (!stored) return false
+  return btoa(password) === stored
+}
+
+export function hasPassword(): boolean {
+  return localStorage.getItem(PASSWORD_KEY) !== null
+}
+
+export function clearPassword(): void {
+  localStorage.removeItem(PASSWORD_KEY)
+  localStorage.removeItem(LOGGED_IN_KEY)
+}
+
+export function setLoggedIn(): void {
+  localStorage.setItem(LOGGED_IN_KEY, 'true')
+}
+
+export function isLoggedIn(): boolean {
+  return localStorage.getItem(LOGGED_IN_KEY) === 'true'
+}
+
+export function clearLoggedIn(): void {
+  localStorage.removeItem(LOGGED_IN_KEY)
+}
