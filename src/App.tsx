@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo, useEffect } from 'react'
 import type { RecordWithMeta } from './types'
-import { getTargets, getRecords, addTarget, renameTarget, deleteTarget, clearAllData, clearAllTargets, clearAllRecords, addRecord, updateRecord, deleteRecord, setPassword, verifyPassword, hasPassword, clearPassword, setLoggedIn, isLoggedIn, clearLoggedIn } from './store'
+import { getTargets, getRecords, addTarget, renameTarget, deleteTarget, clearAllData, clearAllTargets, clearAllRecords, addRecord, updateRecord, deleteRecord, verifyPassword, setLoggedIn, isLoggedIn, clearLoggedIn } from './store'
 import { computeAnomalyStatus, getStats } from './anomaly'
 import { OverviewBar } from './components/OverviewBar'
 import { TargetSidebar } from './components/TargetSidebar'
@@ -15,18 +15,13 @@ export default function App() {
   const [editingRecord, setEditingRecord] = useState<RecordWithMeta | null>(null)
   const [targetModalOpen, setTargetModalOpen] = useState(false)
   const [password, setPasswordInput] = useState('')
-  const [confirmPassword, setConfirmPassword] = useState('')
   const [error, setError] = useState('')
-  
 
   const [isAuthenticated, setIsAuthenticated] = useState(false)
-  const [needsSetup, setNeedsSetup] = useState(false)
 
   useEffect(() => {
     if (isLoggedIn()) {
       setIsAuthenticated(true)
-    } else if (!hasPassword()) {
-      setNeedsSetup(true)
     }
   }, [])
 
@@ -45,37 +40,13 @@ export default function App() {
     }
   }, [password])
 
-  const handleSetup = useCallback(() => {
-    if (!password.trim()) {
-      setError('请输入密码')
-      return
-    }
-    if (password !== confirmPassword) {
-      setError('两次输入的密码不一致')
-      return
-    }
-    setPassword(password)
-    setLoggedIn()
-    setIsAuthenticated(true)
-    setNeedsSetup(false)
-    setError('')
-    setPasswordInput('')
-    setConfirmPassword('')
-  }, [password, confirmPassword])
-
   const handleLogout = useCallback(() => {
     clearLoggedIn()
     setIsAuthenticated(false)
-    if (!hasPassword()) {
-      setNeedsSetup(true)
-    }
   }, [])
 
   const handleRemovePassword = useCallback(() => {
-    if (window.confirm('确定要移除密码保护吗？移除后任何人都可以访问。')) {
-      clearPassword()
-      setIsAuthenticated(true)
-    }
+    // 不再需要这个功能，密码是固定的
   }, [])
 
   if (!isAuthenticated) {
@@ -83,56 +54,22 @@ export default function App() {
       <div className="auth-container">
         <div className="auth-card">
           <h1 className="auth-title">🔐 积分管理系统</h1>
-          {needsSetup ? (
-            <>
-              <p className="auth-subtitle">首次使用，请设置密码</p>
-              <div className="auth-form">
-                <div className="form-group">
-                  <label>设置密码</label>
-                  <input
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPasswordInput(e.target.value)}
-                    placeholder="请输入密码"
-                    className="auth-input"
-                    onKeyPress={(e) => e.key === 'Enter' && handleSetup()}
-                  />
-                </div>
-                <div className="form-group">
-                  <label>确认密码</label>
-                  <input
-                    type="password"
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    placeholder="请再次输入密码"
-                    className="auth-input"
-                    onKeyPress={(e) => e.key === 'Enter' && handleSetup()}
-                  />
-                </div>
-                {error && <p className="auth-error">{error}</p>}
-                <button className="auth-btn" onClick={handleSetup}>设置密码</button>
-              </div>
-            </>
-          ) : (
-            <>
-              <p className="auth-subtitle">请输入密码</p>
-              <div className="auth-form">
-                <div className="form-group">
-                  <label>密码</label>
-                  <input
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPasswordInput(e.target.value)}
-                    placeholder="请输入密码"
-                    className="auth-input"
-                    onKeyPress={(e) => e.key === 'Enter' && handleLogin()}
-                  />
-                </div>
-                {error && <p className="auth-error">{error}</p>}
-                <button className="auth-btn" onClick={handleLogin}>登录</button>
-              </div>
-            </>
-          )}
+          <p className="auth-subtitle">请输入密码</p>
+          <div className="auth-form">
+            <div className="form-group">
+              <label>密码</label>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPasswordInput(e.target.value)}
+                placeholder="请输入密码"
+                className="auth-input"
+                onKeyPress={(e) => e.key === 'Enter' && handleLogin()}
+              />
+            </div>
+            {error && <p className="auth-error">{error}</p>}
+            <button className="auth-btn" onClick={handleLogin}>登录</button>
+          </div>
         </div>
       </div>
     )

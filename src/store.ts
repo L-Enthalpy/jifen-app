@@ -124,26 +124,21 @@ export function clearAllRecords(): void {
   saveData(data)
 }
 
-const PASSWORD_KEY = 'jifen-app:password'
 const LOGGED_IN_KEY = 'jifen-app:logged-in'
 
-export function setPassword(password: string): void {
-  const encrypted = btoa(password)
-  localStorage.setItem(PASSWORD_KEY, encrypted)
+export function setPassword(_password: string): void {
+  // 不再需要这个函数，密码是固定的
 }
 
 export function verifyPassword(password: string): boolean {
-  const stored = localStorage.getItem(PASSWORD_KEY)
-  if (!stored) return false
-  return btoa(password) === stored
+  return password === '2250000'
 }
 
 export function hasPassword(): boolean {
-  return localStorage.getItem(PASSWORD_KEY) !== null
+  return true
 }
 
 export function clearPassword(): void {
-  localStorage.removeItem(PASSWORD_KEY)
   localStorage.removeItem(LOGGED_IN_KEY)
 }
 
