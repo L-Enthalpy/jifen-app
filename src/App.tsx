@@ -9,6 +9,7 @@ import { RecordModal } from './components/RecordModal'
 import { TargetModal } from './components/TargetModal'
 
 export default function App() {
+  // 所有状态都放在这里 - 不要在条件块后面加新状态
   const [version, setVersion] = useState(0)
   const [selectedTargetId, setSelectedTargetId] = useState<number | null>(null)
   const [modalOpen, setModalOpen] = useState(false)
@@ -16,15 +17,9 @@ export default function App() {
   const [targetModalOpen, setTargetModalOpen] = useState(false)
   const [password, setPasswordInput] = useState('')
   const [error, setError] = useState('')
-
   const [isAuthenticated, setIsAuthenticated] = useState(false)
 
-  useEffect(() => {
-    if (isLoggedIn()) {
-      setIsAuthenticated(true)
-    }
-  }, [])
-
+  // 所有 useCallback 和 useMemo 在这里 - 不要放在条件后面
   const handleLogin = useCallback(() => {
     if (!password.trim()) {
       setError('请输入密码')
@@ -44,32 +39,6 @@ export default function App() {
     clearLoggedIn()
     setIsAuthenticated(false)
   }, [])
-
-  if (!isAuthenticated) {
-    return (
-      <div className="auth-container">
-        <div className="auth-card">
-          <h1 className="auth-title">🔐 积分管理系统</h1>
-          <p className="auth-subtitle">请输入密码</p>
-          <div className="auth-form">
-            <div className="form-group">
-              <label>密码</label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPasswordInput(e.target.value)}
-                placeholder="请输入密码"
-                className="auth-input"
-                onKeyPress={(e) => e.key === 'Enter' && handleLogin()}
-              />
-            </div>
-            {error && <p className="auth-error">{error}</p>}
-            <button className="auth-btn" onClick={handleLogin}>登录</button>
-          </div>
-        </div>
-      </div>
-    )
-  }
 
   const refresh = useCallback(() => {
     setVersion((v) => v + 1)
@@ -171,6 +140,40 @@ export default function App() {
     setModalOpen(false)
     setEditingRecord(null)
   }, [])
+
+  // 最后放 useEffect
+  useEffect(() => {
+    if (isLoggedIn()) {
+      setIsAuthenticated(true)
+    }
+  }, [])
+
+  // 认证检查放在最后
+  if (!isAuthenticated) {
+    return (
+      <div className="auth-container">
+        <div className="auth-card">
+          <h1 className="auth-title">🔐 积分管理系统</h1>
+          <p className="auth-subtitle">请输入密码</p>
+          <div className="auth-form">
+            <div className="form-group">
+              <label>密码</label>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPasswordInput(e.target.value)}
+                placeholder="请输入密码"
+                className="auth-input"
+                onKeyPress={(e) => e.key === 'Enter' && handleLogin()}
+              />
+            </div>
+            {error && <p className="auth-error">{error}</p>}
+            <button className="auth-btn" onClick={handleLogin}>登录</button>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="app">
