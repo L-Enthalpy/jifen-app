@@ -187,7 +187,6 @@ export default function App() {
         onClearTargets={handleClearTargets}
         onClearRecords={handleClearRecords}
         onLogout={handleLogout}
-        onRemovePassword={handleRemovePassword}
         records={recordsWithMeta}
         targets={targets}
       />

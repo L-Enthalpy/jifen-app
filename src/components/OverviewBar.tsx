@@ -11,7 +11,6 @@ interface OverviewBarProps {
   onClearTargets: () => void
   onClearRecords: () => void
   onLogout: () => void
-  onRemovePassword: () => void
   records: RecordWithMeta[]
   targets: Target[]
 }
@@ -25,7 +24,6 @@ export function OverviewBar({
   onClearTargets,
   onClearRecords,
   onLogout,
-  onRemovePassword,
   records,
   targets,
 }: OverviewBarProps) {
@@ -122,9 +120,6 @@ export function OverviewBar({
           </div>
           <button className="btn btn-primary" onClick={onAddRecord}>
             + 新增记录
-          </button>
-          <button className="btn btn-secondary" onClick={onRemovePassword}>
-            移除密码保护
           </button>
           <button className="btn btn-danger" onClick={onLogout}>
             登出
