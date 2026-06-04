@@ -45,10 +45,6 @@ export default function App() {
     setIsAuthenticated(false)
   }, [])
 
-  const handleRemovePassword = useCallback(() => {
-    // 不再需要这个功能，密码是固定的
-  }, [])
-
   if (!isAuthenticated) {
     return (
       <div className="auth-container">
