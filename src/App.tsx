@@ -1,44 +1,37 @@
-import { useState, useCallback, useMemo, useEffect } from 'react'
+import { useState, useCallback, useMemo } from 'react'
 import type { RecordWithMeta } from './types'
-import { getTargets, getRecords, addTarget, renameTarget, deleteTarget, clearAllData, clearAllTargets, clearAllRecords, addRecord, updateRecord, deleteRecord, verifyPassword, setLoggedIn, isLoggedIn, clearLoggedIn } from './store'
+import {
+  getTargets,
+  getRecords,
+  addTarget,
+  renameTarget,
+  deleteTarget,
+  clearAllData,
+  clearAllTargets,
+  clearAllRecords,
+  addRecord,
+  updateRecord,
+  deleteRecord,
+  getCurrentUser,
+  logout,
+  deleteAccount,
+} from './store'
 import { computeAnomalyStatus, getStats } from './anomaly'
 import { OverviewBar } from './components/OverviewBar'
 import { TargetSidebar } from './components/TargetSidebar'
 import { RecordTable } from './components/RecordTable'
 import { RecordModal } from './components/RecordModal'
 import { TargetModal } from './components/TargetModal'
+import { TargetOverview } from './components/TargetOverview'
+import { AuthPage } from './components/AuthPage'
 
 export default function App() {
-  // 所有状态都放在这里 - 不要在条件块后面加新状态
   const [version, setVersion] = useState(0)
   const [selectedTargetId, setSelectedTargetId] = useState<number | null>(null)
   const [modalOpen, setModalOpen] = useState(false)
   const [editingRecord, setEditingRecord] = useState<RecordWithMeta | null>(null)
   const [targetModalOpen, setTargetModalOpen] = useState(false)
-  const [password, setPasswordInput] = useState('')
-  const [error, setError] = useState('')
-  const [isAuthenticated, setIsAuthenticated] = useState(false)
-
-  // 所有 useCallback 和 useMemo 在这里 - 不要放在条件后面
-  const handleLogin = useCallback(() => {
-    if (!password.trim()) {
-      setError('请输入密码')
-      return
-    }
-    if (verifyPassword(password)) {
-      setLoggedIn()
-      setIsAuthenticated(true)
-      setError('')
-      setPasswordInput('')
-    } else {
-      setError('密码错误，请重试')
-    }
-  }, [password])
-
-  const handleLogout = useCallback(() => {
-    clearLoggedIn()
-    setIsAuthenticated(false)
-  }, [])
+  const [isAuthenticated, setIsAuthenticated] = useState(!!getCurrentUser())
 
   const refresh = useCallback(() => {
     setVersion((v) => v + 1)
@@ -141,39 +134,32 @@ export default function App() {
     setEditingRecord(null)
   }, [])
 
-  // 最后放 useEffect
-  useEffect(() => {
-    if (isLoggedIn()) {
-      setIsAuthenticated(true)
+  const handleLogout = useCallback(() => {
+    logout()
+    setIsAuthenticated(false)
+    setVersion(0)
+    setSelectedTargetId(null)
+  }, [])
+
+  const handleDeleteAccount = useCallback(() => {
+    if (window.confirm('确定要注销账号吗？您的所有数据将被永久删除，此操作不可恢复！')) {
+      deleteAccount()
+      setIsAuthenticated(false)
+      setVersion(0)
+      setSelectedTargetId(null)
     }
   }, [])
 
-  // 认证检查放在最后
+  const handleLogin = useCallback(() => {
+    setIsAuthenticated(true)
+    refresh()
+  }, [refresh])
+
   if (!isAuthenticated) {
-    return (
-      <div className="auth-container">
-        <div className="auth-card">
-          <h1 className="auth-title">🔐 积分管理系统</h1>
-          <p className="auth-subtitle">请输入密码</p>
-          <div className="auth-form">
-            <div className="form-group">
-              <label>密码</label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPasswordInput(e.target.value)}
-                placeholder="请输入密码"
-                className="auth-input"
-                onKeyPress={(e) => e.key === 'Enter' && handleLogin()}
-              />
-            </div>
-            {error && <p className="auth-error">{error}</p>}
-            <button className="auth-btn" onClick={handleLogin}>登录</button>
-          </div>
-        </div>
-      </div>
-    )
+    return <AuthPage onLogin={handleLogin} />
   }
+
+  const currentUser = getCurrentUser()
 
   return (
     <div className="app">
@@ -188,6 +174,8 @@ export default function App() {
         onLogout={handleLogout}
         records={recordsWithMeta}
         targets={targets}
+        currentUser={currentUser}
+        onDeleteAccount={handleDeleteAccount}
       />
       <div className="main-content">
         <TargetSidebar
@@ -197,11 +185,20 @@ export default function App() {
           targetStats={targetStats}
           onAddTarget={handleAddTarget}
         />
-        <RecordTable
-          records={filteredRecords}
-          onEdit={openEditModal}
-          onDelete={handleDeleteRecord}
-        />
+        <div className="main-content-right">
+          <TargetOverview
+            targets={targets}
+            records={records}
+            targetStats={targetStats}
+            selectedTargetId={selectedTargetId}
+            onSelectTarget={setSelectedTargetId}
+          />
+          <RecordTable
+            records={filteredRecords}
+            onEdit={openEditModal}
+            onDelete={handleDeleteRecord}
+          />
+        </div>
       </div>
       {modalOpen && (
         <RecordModal

@@ -11,8 +11,10 @@ interface OverviewBarProps {
   onClearTargets: () => void
   onClearRecords: () => void
   onLogout: () => void
+  onDeleteAccount: () => void
   records: RecordWithMeta[]
   targets: Target[]
+  currentUser: string | null
 }
 
 export function OverviewBar({
@@ -24,8 +26,10 @@ export function OverviewBar({
   onClearTargets,
   onClearRecords,
   onLogout,
+  onDeleteAccount,
   records,
   targets,
+  currentUser,
 }: OverviewBarProps) {
   const [showClearMenu, setShowClearMenu] = useState(false)
   const [notification, setNotification] = useState<string | null>(null)
@@ -121,8 +125,12 @@ export function OverviewBar({
           <button className="btn btn-primary" onClick={onAddRecord}>
             + 新增记录
           </button>
-          <button className="btn btn-danger" onClick={onLogout}>
+          <span className="current-user">{currentUser}</span>
+          <button className="btn btn-secondary" onClick={onLogout}>
             登出
+          </button>
+          <button className="btn btn-danger" onClick={onDeleteAccount}>
+            注销账号
           </button>
         </div>
       </header>

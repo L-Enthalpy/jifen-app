@@ -20,3 +20,10 @@ export interface AppData {
   targets: Target[]
   records: Record[]
 }
+
+export interface UserAccount {
+  username: string
+  passwordHash: string
+}
+
+export type AuthPage = 'login' | 'register' | 'change-password'
