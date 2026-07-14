@@ -194,32 +194,33 @@ body {
   white-space: nowrap;
 }
 
-.col-zodiac-header {
-  min-width: 72px;
-}
-
-.zodiac-codes {
-  font-weight: 400;
-  font-size: 0.7rem;
-  color: var(--color-text-secondary);
-  margin-top: 2px;
-}
-
-.col-code-num {
-  min-width: 36px;
-  font-size: 0.7rem !important;
-  color: var(--color-text-secondary);
-  padding: 2px 4px !important;
-}
-
-.col-seq {
-  min-width: 40px;
+.col-zodiac {
+  min-width: 48px;
   font-weight: 600;
   background: #fafafa;
   position: sticky;
   left: 0;
   z-index: 5;
+  font-size: 0.85rem;
+  padding: 4px 8px;
+}
+
+.col-code {
+  min-width: 40px;
+  font-weight: 600;
+  background: #fafafa;
+  position: sticky;
+  left: 48px;
+  z-index: 5;
   font-size: 0.8rem;
+  color: var(--color-text-secondary);
+  padding: 4px 6px;
+}
+
+.col-seq-num {
+  min-width: 36px;
+  font-size: 0.8rem;
+  padding: 4px 6px;
 }
 
 .col-summary {
@@ -283,6 +284,12 @@ body {
   font-weight: 600;
   font-size: 0.85rem;
   padding: 6px 4px;
+}
+
+.col-footer-total {
+  font-size: 0.7rem !important;
+  color: var(--color-text-secondary);
+  min-width: 36px;
 }
 
 /* ===== Plan Panel ===== */

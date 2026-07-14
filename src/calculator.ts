@@ -155,13 +155,12 @@ export function computeRemovalPlan(cells: (number | null)[][]): RemovalPlan | nu
 export function exportToCSV(
   cells: (number | null)[][],
   result: CalcResult,
-  zodiacNames: string[],
-  getZodiacIndex: (col: number) => number,
+  rowLabels: { zodiac: string; code: number }[],
 ): void {
   const rows = cells.length
   const cols = rows > 0 ? cells[0].length : 0
 
-  const headers = ['序号', '生肖', '码数列', '填入数值', '是否违规']
+  const headers = ['生肖', '码数', '序号', '填入数值', '是否违规']
   const csvRows: string[][] = [headers]
 
   for (let i = 0; i < rows; i++) {
@@ -169,8 +168,8 @@ export function exportToCSV(
       const val = cells[i][j]
       if (val !== null) {
         csvRows.push([
-          String(i + 1),
-          zodiacNames[getZodiacIndex(j)] ?? '',
+          rowLabels[i]?.zodiac ?? '',
+          String(rowLabels[i]?.code ?? ''),
           String(j + 1),
           String(val),
           result.violations[i][j] ? '违规' : '',

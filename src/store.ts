@@ -1,15 +1,15 @@
-import type { ZodiacInfo } from './types'
+import type { ZodiacInfo, RowLabel } from './types'
 
-const STORAGE_KEY = 'zodiac-table:v1'
-const ROWS = 30
-const COLS = 49
+const STORAGE_KEY = 'zodiac-table:v2'
+const ROWS = 49
+const COLS = 30
 
 export const ZODIACS: ZodiacInfo[] = [
-  { name: '鼠', codeNumbers: [7, 9, 31, 43] },
+  { name: '鼠', codeNumbers: [7, 19, 31, 43] },
   { name: '牛', codeNumbers: [6, 18, 30, 42] },
   { name: '虎', codeNumbers: [5, 17, 29, 41] },
   { name: '兔', codeNumbers: [4, 16, 28, 40] },
-  { name: '龙', codeNumbers: [45, 30, 30, 50] },
+  { name: '龙', codeNumbers: [3, 15, 27, 39] },
   { name: '蛇', codeNumbers: [2, 14, 26, 38] },
   { name: '马', codeNumbers: [1, 13, 25, 37, 49] },
   { name: '羊', codeNumbers: [12, 24, 36, 48] },
@@ -19,18 +19,15 @@ export const ZODIACS: ZodiacInfo[] = [
   { name: '猪', codeNumbers: [8, 20, 32, 44] },
 ]
 
-/** 获取每个生肖的列数 */
-export function getColSpan(zodiacIndex: number): number {
-  return ZODIACS[zodiacIndex]?.codeNumbers.length ?? 4
-}
-
-/** 获取指定生肖的起始列索引 */
-export function getColOffset(zodiacIndex: number): number {
-  let offset = 0
-  for (let i = 0; i < zodiacIndex; i++) {
-    offset += ZODIACS[i].codeNumbers.length
+/** 生成 49 行标签：生肖 + 码数 */
+export function getRowLabels(): RowLabel[] {
+  const labels: RowLabel[] = []
+  for (let zi = 0; zi < ZODIACS.length; zi++) {
+    for (const code of ZODIACS[zi].codeNumbers) {
+      labels.push({ zodiac: ZODIACS[zi].name, code, zodiacIndex: zi })
+    }
   }
-  return offset
+  return labels
 }
 
 export function createEmptyCells(): (number | null)[][] {
@@ -43,7 +40,6 @@ export function loadData(): (number | null)[][] {
     if (raw) {
       const parsed = JSON.parse(raw)
       if (Array.isArray(parsed) && parsed.length === ROWS) {
-        // 兼容旧数据：如果列数不足，补齐
         return parsed.map((row: (number | null)[]) => {
           if (row.length < COLS) {
             return [...row, ...Array(COLS - row.length).fill(null)]
@@ -71,7 +67,7 @@ export function clearAll(): void {
 }
 
 // ===== 备份机制 =====
-const BACKUP_KEY = 'zodiac-table:v1:backup'
+const BACKUP_KEY = 'zodiac-table:v2:backup'
 
 export function saveBackup(cells: (number | null)[][]): void {
   try {

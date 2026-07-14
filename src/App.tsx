@@ -1,21 +1,12 @@
 import { useState, useCallback, useMemo } from 'react'
-import { ZODIACS, getColOffset, loadData, saveData, clearAll, saveBackup, loadBackup, hasBackup, clearBackup } from './store'
+import { ZODIACS, getRowLabels, loadData, saveData, clearAll, saveBackup, loadBackup, hasBackup, clearBackup } from './store'
 import { compute, computeRemovalPlan, exportToCSV } from './calculator'
 import type { CalcResult, RemovalPlan } from './calculator'
 
-const ROWS = 30
-const COLS = 49
+const ROWS = 49
+const COLS = 30
 
-/** 根据列索引获取生肖索引 */
-function getZodiacIndex(col: number): number {
-  let offset = 0
-  for (let i = 0; i < ZODIACS.length; i++) {
-    const span = ZODIACS[i].codeNumbers.length
-    if (col < offset + span) return i
-    offset += span
-  }
-  return ZODIACS.length - 1
-}
+const rowLabels = getRowLabels()
 
 export default function App() {
   const [cells, setCells] = useState<(number | null)[][]>(loadData)
@@ -59,10 +50,8 @@ export default function App() {
 
   const handleApplyPlan = useCallback(() => {
     if (!plan) return
-    // 先备份原始数据
     saveBackup(cells)
     setBackupExists(true)
-    // 清空退回的记录
     const next = cells.map((r) => [...r])
     for (const entry of plan.toRemove) {
       next[entry.row][entry.col] = null
@@ -89,23 +78,10 @@ export default function App() {
   }, [])
 
   const handleExport = useCallback(() => {
-    exportToCSV(cells, result, ZODIACS.map((z) => z.name), getZodiacIndex)
+    exportToCSV(cells, result, rowLabels)
   }, [cells, result])
 
-  // 计算每列合计（按生肖分组，适配可变列数）
-  const zodiacColTotals = useMemo(() => {
-    const totals: number[] = Array(ZODIACS.length).fill(0)
-    for (let z = 0; z < ZODIACS.length; z++) {
-      const offset = getColOffset(z)
-      const span = ZODIACS[z].codeNumbers.length
-      for (let k = 0; k < span; k++) {
-        totals[z] += result.colTotals[offset + k] ?? 0
-      }
-    }
-    return totals
-  }, [result.colTotals])
-
-  const grandTotal = zodiacColTotals.reduce((s, v) => s + v, 0)
+  const grandTotal = result.colTotals.reduce((s, v) => s + v, 0)
 
   return (
     <div className="zodiac-app">
@@ -154,14 +130,11 @@ export default function App() {
             <div className="plan-narrative">
               <strong>方案说明：</strong>
               {plan.toRemove.map((e, i) => {
-                const zIdx = getZodiacIndex(e.col)
-                const zOff = getColOffset(zIdx)
-                const codeNum = e.col - zOff + 1
-                const zName = ZODIACS[zIdx].name
+                const label = rowLabels[e.row]
                 return (
                   <span key={i}>
                     {i > 0 && '；'}
-                    退回第{e.row + 1}行「{zName}」的码数{codeNum}（值{e.value}）
+                    退回序号{e.col + 1}的「{label.zodiac}」码数{label.code}（值{e.value}）
                   </span>
                 )
               })}
@@ -174,7 +147,7 @@ export default function App() {
                 <thead>
                   <tr>
                     <th>序号</th>
-                    <th>行</th>
+                    <th>列</th>
                     <th>生肖</th>
                     <th>码数</th>
                     <th>数值</th>
@@ -182,15 +155,13 @@ export default function App() {
                 </thead>
                 <tbody>
                   {plan.toRemove.map((e, i) => {
-                    const zIdx = getZodiacIndex(e.col)
-                    const zOff = getColOffset(zIdx)
-                    const codeNum = e.col - zOff + 1
+                    const label = rowLabels[e.row]
                     return (
                       <tr key={i}>
                         <td>{i + 1}</td>
-                        <td>{e.row + 1}</td>
-                        <td>{ZODIACS[zIdx].name}</td>
-                        <td>{codeNum}</td>
+                        <td>{e.col + 1}</td>
+                        <td>{label.zodiac}</td>
+                        <td>{label.code}</td>
                         <td className="plan-value">{e.value.toLocaleString()}</td>
                       </tr>
                     )
@@ -214,60 +185,58 @@ export default function App() {
         <table className="zodiac-table">
           <thead>
             <tr>
-              <th className="col-seq" rowSpan={2}>序号</th>
-              {ZODIACS.map((z, zi) => (
-                <th key={zi} colSpan={z.codeNumbers.length} className="col-zodiac-header">
-                  {z.name}
-                  <div className="zodiac-codes">
-                    {z.codeNumbers.join(' / ')}
-                  </div>
-                </th>
+              <th className="col-zodiac" rowSpan={2}>生肖</th>
+              <th className="col-code" rowSpan={2}>码数</th>
+              {Array.from({ length: COLS }, (_, j) => (
+                <th key={j} className="col-seq-num">{j + 1}</th>
               ))}
               <th className="col-summary" rowSpan={2}>总结</th>
             </tr>
-            <tr>
-              {ZODIACS.map((z, zi) =>
-                Array.from({ length: z.codeNumbers.length }, (_, k) => (
-                  <th key={`${zi}-${k}`} className="col-code-num">
-                    {k + 1}
-                  </th>
-                )),
-              )}
-            </tr>
           </thead>
           <tbody>
-            {Array.from({ length: ROWS }, (_, i) => (
-              <tr key={i}>
-                <td className="col-seq">{i + 1}</td>
-                {Array.from({ length: COLS }, (_, j) => {
-                  const val = cells[i]?.[j]
-                  const isViolation = result.violations[i]?.[j] ?? false
-                  const isPlanned = plan?.toRemove.some((e) => e.row === i && e.col === j)
-                  return (
-                    <td
-                      key={j}
-                      className={`cell-input ${isViolation ? 'cell-violation' : ''} ${isPlanned ? 'cell-planned' : ''}`}
-                    >
-                      <input
-                        type="number"
-                        min="0"
-                        value={val ?? ''}
-                        onChange={(e) => handleCellChange(i, j, e.target.value)}
-                        className={isViolation ? 'input-violation' : ''}
-                      />
-                    </td>
-                  )
-                })}
-                <td className="col-summary">{result.rowTotals[i] > 0 ? result.rowTotals[i].toLocaleString() : ''}</td>
-              </tr>
-            ))}
+            {rowLabels.map((label, rowIdx) => {
+              // 当前生肖的第一行
+              const isFirstOfZodiac =
+                rowIdx === 0 || rowLabels[rowIdx - 1].zodiac !== label.zodiac
+              // 当前生肖的总行数
+              const rowSpan = ZODIACS[label.zodiacIndex].codeNumbers.length
+
+              return (
+                <tr key={rowIdx}>
+                  {isFirstOfZodiac && (
+                    <td className="col-zodiac" rowSpan={rowSpan}>{label.zodiac}</td>
+                  )}
+                  <td className="col-code">{label.code}</td>
+                  {Array.from({ length: COLS }, (_, colIdx) => {
+                    const val = cells[rowIdx]?.[colIdx]
+                    const isViolation = result.violations[rowIdx]?.[colIdx] ?? false
+                    const isPlanned = plan?.toRemove.some((e) => e.row === rowIdx && e.col === colIdx)
+                    return (
+                      <td
+                        key={colIdx}
+                        className={`cell-input ${isViolation ? 'cell-violation' : ''} ${isPlanned ? 'cell-planned' : ''}`}
+                      >
+                        <input
+                          type="number"
+                          min="0"
+                          value={val ?? ''}
+                          onChange={(e) => handleCellChange(rowIdx, colIdx, e.target.value)}
+                          className={isViolation ? 'input-violation' : ''}
+                        />
+                      </td>
+                    )
+                  })}
+                  <td className="col-summary">{result.rowTotals[rowIdx] > 0 ? result.rowTotals[rowIdx].toLocaleString() : ''}</td>
+                </tr>
+              )
+            })}
           </tbody>
           <tfoot>
             <tr>
-              <td className="col-seq">总计</td>
-              {zodiacColTotals.map((total, i) => (
-                <td key={i} colSpan={ZODIACS[i].codeNumbers.length} className="col-summary">
-                  {total > 0 ? total.toLocaleString() : ''}
+              <td className="col-zodiac" colSpan={2}>总计</td>
+              {Array.from({ length: COLS }, (_, j) => (
+                <td key={j} className="col-footer-total">
+                  {result.colTotals[j] > 0 ? result.colTotals[j].toLocaleString() : ''}
                 </td>
               ))}
               <td className="col-summary">{grandTotal > 0 ? grandTotal.toLocaleString() : ''}</td>
