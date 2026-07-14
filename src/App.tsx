@@ -1,6 +1,6 @@
-import { useState, useCallback, useMemo } from 'react'
+import { useState, useCallback, useMemo, useRef } from 'react'
 import { ZODIACS, getRowLabels, loadData, saveData, clearAll, saveBackup, loadBackup, hasBackup, clearBackup } from './store'
-import { compute, computeRemovalPlan, exportToCSV } from './calculator'
+import { compute, computeRemovalPlan, exportToCSV, parseCSV } from './calculator'
 import type { CalcResult, RemovalPlan } from './calculator'
 
 const ROWS = 49
@@ -12,6 +12,7 @@ export default function App() {
   const [cells, setCells] = useState<(number | null)[][]>(loadData)
   const [plan, setPlan] = useState<RemovalPlan | null>(null)
   const [backupExists, setBackupExists] = useState(hasBackup)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const result: CalcResult = useMemo(() => compute(cells), [cells])
 
@@ -81,6 +82,38 @@ export default function App() {
     exportToCSV(cells, result, rowLabels)
   }, [cells, result])
 
+  const handleImportClick = useCallback(() => {
+    fileInputRef.current?.click()
+  }, [])
+
+  const handleFileChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0]
+      if (!file) return
+
+      const reader = new FileReader()
+      reader.onload = () => {
+        const text = reader.result as string
+        const importResult = parseCSV(text)
+        if (!importResult.success) {
+          alert(importResult.message)
+          return
+        }
+        const msg = `${importResult.message}\n\n格式: ${importResult.format === 'grid' ? '网格格式 (49×30)' : '长格式 (生肖/码数/序号/值)'}\n\n确定要导入吗？当前数据将被覆盖。`
+        if (window.confirm(msg)) {
+          setCells(importResult.cells)
+          saveData(importResult.cells)
+          setPlan(null)
+        }
+      }
+      reader.readAsText(file, 'UTF-8')
+
+      // 重置 input 以便重复选择同一文件
+      e.target.value = ''
+    },
+    [],
+  )
+
   const grandTotal = result.colTotals.reduce((s, v) => s + v, 0)
 
   return (
@@ -111,6 +144,14 @@ export default function App() {
           )}
           <button className="btn btn-danger" onClick={handleClear}>清空数据</button>
           <button className="btn btn-primary" onClick={handleExport}>导出 CSV</button>
+          <button className="btn btn-primary" onClick={handleImportClick}>导入 CSV</button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".csv"
+            style={{ display: 'none' }}
+            onChange={handleFileChange}
+          />
         </div>
       </header>
 
@@ -125,6 +166,8 @@ export default function App() {
             <span>退回 <strong>{plan.removedCount}</strong> 条记录</span>
             <span>保留总积分 <strong>{plan.remainingSum.toLocaleString()}</strong></span>
             <span>剩余违规 <strong>{plan.remainingViolations}</strong> 条</span>
+            <span>违规损失 <strong>{plan.loss.toLocaleString()}</strong></span>
+            <span>目标值 <strong>{plan.objective.toLocaleString()}</strong></span>
           </div>
           {plan.toRemove.length > 0 && (
             <div className="plan-narrative">
