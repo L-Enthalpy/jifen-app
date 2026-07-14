@@ -1,229 +1,277 @@
 import { useState, useCallback, useMemo } from 'react'
-import type { RecordWithMeta } from './types'
-import {
-  getTargets,
-  getRecords,
-  addTarget,
-  renameTarget,
-  deleteTarget,
-  clearAllData,
-  clearAllTargets,
-  clearAllRecords,
-  addRecord,
-  updateRecord,
-  deleteRecord,
-  getCurrentUser,
-  logout,
-  deleteAccount,
-} from './store'
-import { computeAnomalyStatus, getStats } from './anomaly'
-import { OverviewBar } from './components/OverviewBar'
-import { TargetSidebar } from './components/TargetSidebar'
-import { RecordTable } from './components/RecordTable'
-import { RecordModal } from './components/RecordModal'
-import { TargetModal } from './components/TargetModal'
-import { TargetOverview } from './components/TargetOverview'
-import { AuthPage } from './components/AuthPage'
+import { ZODIACS, getColOffset, loadData, saveData, clearAll, saveBackup, loadBackup, hasBackup, clearBackup } from './store'
+import { compute, computeRemovalPlan, exportToCSV } from './calculator'
+import type { CalcResult, RemovalPlan } from './calculator'
+
+const ROWS = 30
+const COLS = 49
+
+/** 根据列索引获取生肖索引 */
+function getZodiacIndex(col: number): number {
+  let offset = 0
+  for (let i = 0; i < ZODIACS.length; i++) {
+    const span = ZODIACS[i].codeNumbers.length
+    if (col < offset + span) return i
+    offset += span
+  }
+  return ZODIACS.length - 1
+}
 
 export default function App() {
-  const [version, setVersion] = useState(0)
-  const [selectedTargetId, setSelectedTargetId] = useState<number | null>(null)
-  const [modalOpen, setModalOpen] = useState(false)
-  const [editingRecord, setEditingRecord] = useState<RecordWithMeta | null>(null)
-  const [targetModalOpen, setTargetModalOpen] = useState(false)
-  const [isAuthenticated, setIsAuthenticated] = useState(!!getCurrentUser())
+  const [cells, setCells] = useState<(number | null)[][]>(loadData)
+  const [plan, setPlan] = useState<RemovalPlan | null>(null)
+  const [backupExists, setBackupExists] = useState(hasBackup)
 
-  const refresh = useCallback(() => {
-    setVersion((v) => v + 1)
-  }, [])
+  const result: CalcResult = useMemo(() => compute(cells), [cells])
 
-  const targets = useMemo(() => getTargets(), [version])
-  const records = useMemo(() => getRecords(), [version])
-  const recordsWithMeta = useMemo(
-    () => computeAnomalyStatus(records, targets),
-    [records, targets],
-  )
-
-  const filteredRecords = useMemo(() => {
-    if (selectedTargetId === null) return recordsWithMeta
-    return recordsWithMeta.filter((r) => r.targetId === selectedTargetId)
-  }, [recordsWithMeta, selectedTargetId])
-
-  const stats = useMemo(() => getStats(recordsWithMeta), [recordsWithMeta])
-
-  const targetStats = useMemo(() => {
-    const map = new Map<number, number>()
-    for (const r of records) {
-      map.set(r.targetId, (map.get(r.targetId) ?? 0) + r.points)
-    }
-    return map
-  }, [records])
-
-  const handleAddTarget = useCallback(() => {
-    addTarget()
-    refresh()
-  }, [refresh])
-
-  const handleRenameTarget = useCallback(
-    (id: number, name: string) => {
-      renameTarget(id, name)
-      refresh()
+  const handleCellChange = useCallback(
+    (row: number, col: number, raw: string) => {
+      const num = parseInt(raw, 10)
+      const next = cells.map((r) => [...r])
+      next[row][col] = !raw.trim() || isNaN(num) || num < 0 ? null : num
+      setCells(next)
+      saveData(next)
+      setPlan(null)
     },
-    [refresh],
+    [cells],
   )
 
-  const handleAddRecord = useCallback(
-    (targetId: number, points: number, note: string) => {
-      addRecord(targetId, points, note)
-      refresh()
-    },
-    [refresh],
-  )
-
-  const handleUpdateRecord = useCallback(
-    (id: string, updates: { targetId?: number; points?: number; note?: string }) => {
-      updateRecord(id, updates)
-      refresh()
-    },
-    [refresh],
-  )
-
-  const handleDeleteRecord = useCallback(
-    (id: string) => {
-      deleteRecord(id)
-      refresh()
-    },
-    [refresh],
-  )
-
-  const handleDeleteTarget = useCallback(
-    (id: number) => {
-      deleteTarget(id)
-      refresh()
-    },
-    [refresh],
-  )
-
-  const handleClearAll = useCallback(() => {
-    clearAllData()
-    refresh()
-  }, [refresh])
-
-  const handleClearTargets = useCallback(() => {
-    clearAllTargets()
-    refresh()
-  }, [refresh])
-
-  const handleClearRecords = useCallback(() => {
-    clearAllRecords()
-    refresh()
-  }, [refresh])
-
-  const openAddModal = useCallback(() => {
-    setEditingRecord(null)
-    setModalOpen(true)
-  }, [])
-
-  const openEditModal = useCallback((record: RecordWithMeta) => {
-    setEditingRecord(record)
-    setModalOpen(true)
-  }, [])
-
-  const closeModal = useCallback(() => {
-    setModalOpen(false)
-    setEditingRecord(null)
-  }, [])
-
-  const handleLogout = useCallback(() => {
-    logout()
-    setIsAuthenticated(false)
-    setVersion(0)
-    setSelectedTargetId(null)
-  }, [])
-
-  const handleDeleteAccount = useCallback(() => {
-    if (window.confirm('确定要注销账号吗？您的所有数据将被永久删除，此操作不可恢复！')) {
-      deleteAccount()
-      setIsAuthenticated(false)
-      setVersion(0)
-      setSelectedTargetId(null)
+  const handleClear = useCallback(() => {
+    if (window.confirm('确定要清空所有数据吗？此操作不可恢复！')) {
+      clearAll()
+      setCells(Array.from({ length: ROWS }, () => Array(COLS).fill(null) as (number | null)[]))
+      setPlan(null)
     }
   }, [])
 
-  const handleLogin = useCallback(() => {
-    setIsAuthenticated(true)
-    refresh()
-  }, [refresh])
+  const handleRecalc = useCallback(() => {
+    setCells((prev) => prev.map((r) => [...r]))
+    setPlan(null)
+  }, [])
 
-  if (!isAuthenticated) {
-    return <AuthPage onLogin={handleLogin} />
-  }
+  const handleComputePlan = useCallback(() => {
+    const p = computeRemovalPlan(cells)
+    setPlan(p)
+  }, [cells])
 
-  const currentUser = getCurrentUser()
+  const handleApplyPlan = useCallback(() => {
+    if (!plan) return
+    // 先备份原始数据
+    saveBackup(cells)
+    setBackupExists(true)
+    // 清空退回的记录
+    const next = cells.map((r) => [...r])
+    for (const entry of plan.toRemove) {
+      next[entry.row][entry.col] = null
+    }
+    setCells(next)
+    saveData(next)
+    setPlan(null)
+  }, [cells, plan])
+
+  const handleDismissPlan = useCallback(() => {
+    setPlan(null)
+  }, [])
+
+  const handleRestore = useCallback(() => {
+    if (!window.confirm('确定要恢复原始数据吗？当前数据将被覆盖。')) return
+    const backup = loadBackup()
+    if (backup) {
+      setCells(backup)
+      saveData(backup)
+      clearBackup()
+      setBackupExists(false)
+      setPlan(null)
+    }
+  }, [])
+
+  const handleExport = useCallback(() => {
+    exportToCSV(cells, result, ZODIACS.map((z) => z.name), getZodiacIndex)
+  }, [cells, result])
+
+  // 计算每列合计（按生肖分组，适配可变列数）
+  const zodiacColTotals = useMemo(() => {
+    const totals: number[] = Array(ZODIACS.length).fill(0)
+    for (let z = 0; z < ZODIACS.length; z++) {
+      const offset = getColOffset(z)
+      const span = ZODIACS[z].codeNumbers.length
+      for (let k = 0; k < span; k++) {
+        totals[z] += result.colTotals[offset + k] ?? 0
+      }
+    }
+    return totals
+  }, [result.colTotals])
+
+  const grandTotal = zodiacColTotals.reduce((s, v) => s + v, 0)
 
   return (
-    <div className="app">
-      <OverviewBar
-        stats={stats}
-        onRecalculate={refresh}
-        onAddRecord={openAddModal}
-        onManageTargets={() => setTargetModalOpen(true)}
-        onClearAll={handleClearAll}
-        onClearTargets={handleClearTargets}
-        onClearRecords={handleClearRecords}
-        onLogout={handleLogout}
-        records={recordsWithMeta}
-        targets={targets}
-        currentUser={currentUser}
-        onDeleteAccount={handleDeleteAccount}
-      />
-      <div className="main-content">
-        <TargetSidebar
-          targets={targets}
-          selectedTargetId={selectedTargetId}
-          onSelect={setSelectedTargetId}
-          targetStats={targetStats}
-          onAddTarget={handleAddTarget}
-        />
-        <div className="main-content-right">
-          <TargetOverview
-            targets={targets}
-            records={records}
-            targetStats={targetStats}
-            selectedTargetId={selectedTargetId}
-            onSelectTarget={setSelectedTargetId}
-          />
-          <RecordTable
-            records={filteredRecords}
-            onEdit={openEditModal}
-            onDelete={handleDeleteRecord}
-          />
+    <div className="zodiac-app">
+      <header className="zodiac-header">
+        <h1>生肖码数对照表</h1>
+        <div className="zodiac-stats">
+          <span className="stat-item">
+            总填入 <strong>{result.filledCount}</strong>
+          </span>
+          <span className="stat-item">
+            违规 <strong className="violation-num">{result.violationCount}</strong>
+          </span>
+          <span className="stat-item">
+            总积分 <strong>{result.totalSum.toLocaleString()}</strong>
+          </span>
+          <span className="stat-item">
+            阈值 <strong>{result.threshold.toFixed(2)}</strong>
+          </span>
         </div>
+        <div className="zodiac-actions">
+          <button className="btn btn-secondary" onClick={handleRecalc}>重新计算</button>
+          {result.violationCount > 0 && (
+            <button className="btn btn-warning" onClick={handleComputePlan}>计算退回方案</button>
+          )}
+          {backupExists && (
+            <button className="btn btn-restore" onClick={handleRestore}>恢复原始数据</button>
+          )}
+          <button className="btn btn-danger" onClick={handleClear}>清空数据</button>
+          <button className="btn btn-primary" onClick={handleExport}>导出 CSV</button>
+        </div>
+      </header>
+
+      {/* 退回方案面板 */}
+      {plan && (
+        <div className="plan-panel">
+          <div className="plan-panel-header">
+            <h3>退回方案</h3>
+            <button className="btn btn-small" onClick={handleDismissPlan}>关闭</button>
+          </div>
+          <div className="plan-stats">
+            <span>退回 <strong>{plan.removedCount}</strong> 条记录</span>
+            <span>保留总积分 <strong>{plan.remainingSum.toLocaleString()}</strong></span>
+            <span>剩余违规 <strong>{plan.remainingViolations}</strong> 条</span>
+          </div>
+          {plan.toRemove.length > 0 && (
+            <div className="plan-narrative">
+              <strong>方案说明：</strong>
+              {plan.toRemove.map((e, i) => {
+                const zIdx = getZodiacIndex(e.col)
+                const zOff = getColOffset(zIdx)
+                const codeNum = e.col - zOff + 1
+                const zName = ZODIACS[zIdx].name
+                return (
+                  <span key={i}>
+                    {i > 0 && '；'}
+                    退回第{e.row + 1}行「{zName}」的码数{codeNum}（值{e.value}）
+                  </span>
+                )
+              })}
+              。退回后总积分 {plan.remainingSum.toLocaleString()}，阈值 {(plan.remainingSum * 0.75 / 47).toFixed(2)}，剩余违规 {plan.remainingViolations} 条。
+            </div>
+          )}
+          {plan.toRemove.length > 0 && (
+            <div className="plan-list-wrap">
+              <table className="plan-table">
+                <thead>
+                  <tr>
+                    <th>序号</th>
+                    <th>行</th>
+                    <th>生肖</th>
+                    <th>码数</th>
+                    <th>数值</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {plan.toRemove.map((e, i) => {
+                    const zIdx = getZodiacIndex(e.col)
+                    const zOff = getColOffset(zIdx)
+                    const codeNum = e.col - zOff + 1
+                    return (
+                      <tr key={i}>
+                        <td>{i + 1}</td>
+                        <td>{e.row + 1}</td>
+                        <td>{ZODIACS[zIdx].name}</td>
+                        <td>{codeNum}</td>
+                        <td className="plan-value">{e.value.toLocaleString()}</td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+          <div className="plan-actions">
+            <button className="btn btn-primary" onClick={handleApplyPlan}>
+              采用方案（自动清空以上记录）
+            </button>
+            <button className="btn btn-secondary" onClick={handleDismissPlan}>
+              不采用
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div className="zodiac-table-wrap">
+        <table className="zodiac-table">
+          <thead>
+            <tr>
+              <th className="col-seq" rowSpan={2}>序号</th>
+              {ZODIACS.map((z, zi) => (
+                <th key={zi} colSpan={z.codeNumbers.length} className="col-zodiac-header">
+                  {z.name}
+                  <div className="zodiac-codes">
+                    {z.codeNumbers.join(' / ')}
+                  </div>
+                </th>
+              ))}
+              <th className="col-summary" rowSpan={2}>总结</th>
+            </tr>
+            <tr>
+              {ZODIACS.map((z, zi) =>
+                Array.from({ length: z.codeNumbers.length }, (_, k) => (
+                  <th key={`${zi}-${k}`} className="col-code-num">
+                    {k + 1}
+                  </th>
+                )),
+              )}
+            </tr>
+          </thead>
+          <tbody>
+            {Array.from({ length: ROWS }, (_, i) => (
+              <tr key={i}>
+                <td className="col-seq">{i + 1}</td>
+                {Array.from({ length: COLS }, (_, j) => {
+                  const val = cells[i]?.[j]
+                  const isViolation = result.violations[i]?.[j] ?? false
+                  const isPlanned = plan?.toRemove.some((e) => e.row === i && e.col === j)
+                  return (
+                    <td
+                      key={j}
+                      className={`cell-input ${isViolation ? 'cell-violation' : ''} ${isPlanned ? 'cell-planned' : ''}`}
+                    >
+                      <input
+                        type="number"
+                        min="0"
+                        value={val ?? ''}
+                        onChange={(e) => handleCellChange(i, j, e.target.value)}
+                        className={isViolation ? 'input-violation' : ''}
+                      />
+                    </td>
+                  )
+                })}
+                <td className="col-summary">{result.rowTotals[i] > 0 ? result.rowTotals[i].toLocaleString() : ''}</td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot>
+            <tr>
+              <td className="col-seq">总计</td>
+              {zodiacColTotals.map((total, i) => (
+                <td key={i} colSpan={ZODIACS[i].codeNumbers.length} className="col-summary">
+                  {total > 0 ? total.toLocaleString() : ''}
+                </td>
+              ))}
+              <td className="col-summary">{grandTotal > 0 ? grandTotal.toLocaleString() : ''}</td>
+            </tr>
+          </tfoot>
+        </table>
       </div>
-      {modalOpen && (
-        <RecordModal
-          record={editingRecord}
-          targets={targets}
-          onSave={(targetId, points, note) => {
-            if (editingRecord) {
-              handleUpdateRecord(editingRecord.id, { targetId, points, note })
-            } else {
-              handleAddRecord(targetId, points, note)
-            }
-            closeModal()
-          }}
-          onClose={closeModal}
-        />
-      )}
-      {targetModalOpen && (
-        <TargetModal
-          targets={targets}
-          onRename={handleRenameTarget}
-          onDelete={handleDeleteTarget}
-          onAdd={handleAddTarget}
-          onClose={() => setTargetModalOpen(false)}
-        />
-      )}
     </div>
   )
 }
