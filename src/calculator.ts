@@ -9,6 +9,7 @@ export interface CalcResult {
   colTotals: number[]
   violationCount: number
   filledCount: number
+  violatingRows: number[]
 }
 
 /** 单个填入值的位置信息 */
@@ -50,11 +51,12 @@ export function compute(cells: (number | null)[][]): CalcResult {
   const violations: boolean[][] = []
   const rowTotals: number[] = []
   const colTotals: number[] = Array(cols).fill(0)
+  const violatingRows: number[] = []
   let violationCount = 0
   let filledCount = 0
 
+  // 第一遍：计算每行的总积分
   for (let i = 0; i < rows; i++) {
-    const violationRow: boolean[] = []
     let rowSum = 0
     for (let j = 0; j < cols; j++) {
       const val = cells[i][j]
@@ -62,37 +64,49 @@ export function compute(cells: (number | null)[][]): CalcResult {
         rowSum += val
         colTotals[j] += val
         filledCount++
-        if (val > threshold) {
-          violationRow.push(true)
-          violationCount++
-        } else {
-          violationRow.push(false)
-        }
+      }
+    }
+    rowTotals.push(rowSum)
+  }
+
+  // 第二遍：行级判定 —— 每行总积分 > 阈值则该行整行违规
+  for (let i = 0; i < rows; i++) {
+    const violationRow: boolean[] = []
+    const rowViolates = rowTotals[i] > 0 && rowTotals[i] > threshold
+    if (rowViolates) {
+      violatingRows.push(i)
+      violationCount++
+    }
+    for (let j = 0; j < cols; j++) {
+      if (rowViolates && cells[i][j] !== null) {
+        violationRow.push(true)
       } else {
         violationRow.push(false)
       }
     }
     violations.push(violationRow)
-    rowTotals.push(rowSum)
   }
 
-  return { violations, totalSum, threshold, rowTotals, colTotals, violationCount, filledCount }
+  return { violations, totalSum, threshold, rowTotals, colTotals, violationCount, filledCount, violatingRows }
 }
 
 /**
- * 最优退回方案算法：
+ * 最优退回方案算法（行级约束）：
  *
- * 约束：保留值 v 需满足 v ≤ (总积分 × 0.75) / 47
- * 即：总积分 ≥ v × 47 / 0.75 ≈ v × 62.67
+ * 约束：每行总积分 ≤ (总积分 × 0.75) / 47
+ * 即：max(行总积分) ≤ grand_total × 0.75 / 47
  *
- * 策略：将所有值从大到小排序，依次尝试以每个值作为"最大保留值"，
- * 保留所有 ≤ 该值的记录，检查是否满足约束，取总积分最大的方案。
+ * 策略：将所有单元格值从大到小排序，依次尝试以每个位置作为 cutoff，
+ * 保留 cutoff 及之后的所有单元格，检查行级约束是否满足，取总积分最大的方案。
  */
 export function computeRemovalPlan(cells: (number | null)[][]): RemovalPlan | null {
+  const rows = cells.length
+  const cols = rows > 0 ? cells[0].length : 0
+
   // 收集所有有值的位置
   const entries: CellEntry[] = []
-  for (let i = 0; i < cells.length; i++) {
-    for (let j = 0; j < cells[i].length; j++) {
+  for (let i = 0; i < rows; i++) {
+    for (let j = 0; j < cols; j++) {
       const val = cells[i][j]
       if (val !== null) {
         entries.push({ row: i, col: j, value: val })
@@ -105,7 +119,11 @@ export function computeRemovalPlan(cells: (number | null)[][]): RemovalPlan | nu
   // 检查当前是否已有违规
   const currentTotal = entries.reduce((s, e) => s + e.value, 0)
   const currentThreshold = calcThreshold(currentTotal)
-  const hasViolation = entries.some((e) => e.value > currentThreshold)
+  const rowTotals: number[] = Array(rows).fill(0)
+  for (const e of entries) {
+    rowTotals[e.row] += e.value
+  }
+  const hasViolation = rowTotals.some((rt) => rt > 0 && rt > currentThreshold)
   if (!hasViolation) return null
 
   // 按值从大到小排序
@@ -119,17 +137,25 @@ export function computeRemovalPlan(cells: (number | null)[][]): RemovalPlan | nu
     suffixSum[i] = suffixSum[i + 1] + sorted[i].value
   }
 
-  // 遍历每个可能的"最大保留值"，找最优方案
+  // 遍历每个可能的 cutoff，找最优方案
   let bestI = -1
   let bestSum = 0
 
   for (let i = 0; i < n; i++) {
-    const maxVal = sorted[i].value
-    const total = suffixSum[i]
-    // 约束：总积分 ≥ 最大值的 62.67 倍
-    if (total >= maxVal * DIVISOR / COEFFICIENT) {
-      if (total > bestSum) {
-        bestSum = total
+    const grandTotal = suffixSum[i]
+    const threshold = calcThreshold(grandTotal)
+
+    // 计算保留的 cells 每行的行总积分
+    const retainedRowTotals: number[] = Array(rows).fill(0)
+    for (let k = i; k < n; k++) {
+      retainedRowTotals[sorted[k].row] += sorted[k].value
+    }
+
+    // 检查行级约束：每行总积分 ≤ 阈值
+    const maxRowTotal = Math.max(...retainedRowTotals)
+    if (maxRowTotal <= threshold) {
+      if (grandTotal > bestSum) {
+        bestSum = grandTotal
         bestI = i
       }
     }
@@ -138,11 +164,17 @@ export function computeRemovalPlan(cells: (number | null)[][]): RemovalPlan | nu
   // 没有找到任何有效方案
   if (bestI === -1) return null
 
-  // 需要退回的是排序后索引 0 到 bestI-1 的记录（值大于 maxVal 的）
+  // 需要退回的是排序后索引 0 到 bestI-1 的记录
   const toRemove = sorted.slice(0, bestI)
   const remainingSum = suffixSum[bestI]
   const finalThreshold = calcThreshold(remainingSum)
-  const remainingViolations = sorted.slice(bestI).filter((e) => e.value > finalThreshold).length
+
+  // 计算退回后的违规行数
+  const finalRowTotals: number[] = Array(rows).fill(0)
+  for (let k = bestI; k < n; k++) {
+    finalRowTotals[sorted[k].row] += sorted[k].value
+  }
+  const remainingViolations = finalRowTotals.filter((rt) => rt > 0 && rt > finalThreshold).length
 
   return {
     toRemove,

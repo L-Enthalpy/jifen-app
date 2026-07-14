@@ -202,26 +202,24 @@ export default function App() {
               const rowSpan = ZODIACS[label.zodiacIndex].codeNumbers.length
 
               return (
-                <tr key={rowIdx}>
+                <tr key={rowIdx} className={result.violatingRows.includes(rowIdx) ? 'row-violation' : ''}>
                   {isFirstOfZodiac && (
                     <td className="col-zodiac" rowSpan={rowSpan}>{label.zodiac}</td>
                   )}
                   <td className="col-code">{label.code}</td>
                   {Array.from({ length: COLS }, (_, colIdx) => {
                     const val = cells[rowIdx]?.[colIdx]
-                    const isViolation = result.violations[rowIdx]?.[colIdx] ?? false
                     const isPlanned = plan?.toRemove.some((e) => e.row === rowIdx && e.col === colIdx)
                     return (
                       <td
                         key={colIdx}
-                        className={`cell-input ${isViolation ? 'cell-violation' : ''} ${isPlanned ? 'cell-planned' : ''}`}
+                        className={`cell-input ${isPlanned ? 'cell-planned' : ''}`}
                       >
                         <input
                           type="number"
                           min="0"
                           value={val ?? ''}
                           onChange={(e) => handleCellChange(rowIdx, colIdx, e.target.value)}
-                          className={isViolation ? 'input-violation' : ''}
                         />
                       </td>
                     )

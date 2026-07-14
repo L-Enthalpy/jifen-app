@@ -268,12 +268,12 @@ body {
   -moz-appearance: textfield;
 }
 
-/* ===== Violation Highlight ===== */
-.cell-violation {
+/* ===== Violation Highlight (row-level) ===== */
+.row-violation td {
   background: var(--color-violation-bg) !important;
 }
 
-.input-violation {
+.row-violation .cell-input input {
   color: var(--color-violation-text) !important;
   font-weight: 700 !important;
 }
@@ -383,7 +383,7 @@ body {
   background: #fde7e9 !important;
 }
 
-.cell-planned.cell-violation {
+.row-violation .cell-planned {
   background: #ffd5d5 !important;
 }
 
