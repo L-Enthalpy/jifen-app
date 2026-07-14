@@ -51,6 +51,9 @@ export default function App() {
 
   const handleComputePlan = useCallback(() => {
     const p = computeRemovalPlan(cells)
+    if (!p) {
+      alert('无法找到有效退回方案。当前数据中，任何保留部分记录的组合都无法满足"无违规"约束，请检查数据。')
+    }
     setPlan(p)
   }, [cells])
 

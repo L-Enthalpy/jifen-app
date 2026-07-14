@@ -80,8 +80,13 @@ export function compute(cells: (number | null)[][]): CalcResult {
 }
 
 /**
- * 贪心算法：找到最佳退回方案，最大化保留的总和
- * 策略：每次移除最大的违规值，直到没有违规
+ * 最优退回方案算法：
+ *
+ * 约束：保留值 v 需满足 v ≤ (总积分 × 0.75) / 47
+ * 即：总积分 ≥ v × 47 / 0.75 ≈ v × 62.67
+ *
+ * 策略：将所有值从大到小排序，依次尝试以每个值作为"最大保留值"，
+ * 保留所有 ≤ 该值的记录，检查是否满足约束，取总积分最大的方案。
  */
 export function computeRemovalPlan(cells: (number | null)[][]): RemovalPlan | null {
   // 收集所有有值的位置
@@ -97,52 +102,53 @@ export function computeRemovalPlan(cells: (number | null)[][]): RemovalPlan | nu
 
   if (entries.length === 0) return null
 
-  // 模拟当前状态
-  let currentTotal = entries.reduce((s, e) => s + e.value, 0)
-  let currentThreshold = calcThreshold(currentTotal)
+  // 检查当前是否已有违规
+  const currentTotal = entries.reduce((s, e) => s + e.value, 0)
+  const currentThreshold = calcThreshold(currentTotal)
+  const hasViolation = entries.some((e) => e.value > currentThreshold)
+  if (!hasViolation) return null
 
-  // 找出所有违规值
-  const violating = entries.filter((e) => e.value > currentThreshold)
-  if (violating.length === 0) return null
+  // 按值从大到小排序
+  const sorted = [...entries].sort((a, b) => b.value - a.value)
+  const n = sorted.length
 
-  // 贪心：每次移除最大的违规值
-  const removed: CellEntry[] = []
-  const remaining = new Set(entries.map((_, i) => i))
-
-  while (true) {
-    // 找出当前剩余值中最大的违规值
-    let maxIdx = -1
-    let maxVal = -1
-    for (const idx of remaining) {
-      const e = entries[idx]
-      if (e.value > currentThreshold && e.value > maxVal) {
-        maxVal = e.value
-        maxIdx = idx
-      }
-    }
-
-    if (maxIdx === -1) break // 没有违规了
-
-    remaining.delete(maxIdx)
-    removed.push(entries[maxIdx])
-    currentTotal -= entries[maxIdx].value
-
-    if (remaining.size === 0) break
-
-    currentThreshold = calcThreshold(currentTotal)
+  // 计算后缀和（从第 i 个开始到末尾的和）
+  const suffixSum: number[] = new Array(n).fill(0)
+  suffixSum[n - 1] = sorted[n - 1].value
+  for (let i = n - 2; i >= 0; i--) {
+    suffixSum[i] = suffixSum[i + 1] + sorted[i].value
   }
 
-  // 计算最终状态
-  const remainingEntries = Array.from(remaining).map((i) => entries[i])
-  const remainingSum = remainingEntries.reduce((s, e) => s + e.value, 0)
+  // 遍历每个可能的"最大保留值"，找最优方案
+  let bestI = -1
+  let bestSum = 0
+
+  for (let i = 0; i < n; i++) {
+    const maxVal = sorted[i].value
+    const total = suffixSum[i]
+    // 约束：总积分 ≥ 最大值的 62.67 倍
+    if (total >= maxVal * DIVISOR / COEFFICIENT) {
+      if (total > bestSum) {
+        bestSum = total
+        bestI = i
+      }
+    }
+  }
+
+  // 没有找到任何有效方案
+  if (bestI === -1) return null
+
+  // 需要退回的是排序后索引 0 到 bestI-1 的记录（值大于 maxVal 的）
+  const toRemove = sorted.slice(0, bestI)
+  const remainingSum = suffixSum[bestI]
   const finalThreshold = calcThreshold(remainingSum)
-  const remainingViolations = remainingEntries.filter((e) => e.value > finalThreshold).length
+  const remainingViolations = sorted.slice(bestI).filter((e) => e.value > finalThreshold).length
 
   return {
-    toRemove: removed,
+    toRemove,
     remainingSum,
     remainingViolations,
-    removedCount: removed.length,
+    removedCount: toRemove.length,
   }
 }
 
